@@ -103,4 +103,70 @@ mkfs.btrfs -L "HOME" -f -n 32k $HOME &>/dev/null
 
 mount -t btrfs $ROOT /mnt
 
+# Creating ROOT subvolumes
+
+echo -ne "
+-------------------------------------------------------------------------
+                      Creating ROOT subvolumes
+-------------------------------------------------------------------------
+"
+btrfs subvolume create /mnt/@ &>/dev/null
+btrfs subvolume create /mnt/@/.snapshots &>/dev/null
+mkdir /mnt/@/.snapshots/1 &>/dev/null
+btrfs subvolume create /mnt/@/.snapshots/1/snapshot &>/dev/null
+mkdir /mnt/@/boot &>/dev/null
+btrfs subvolume create /mnt/@/boot/grub &>/dev/null
+mkdir /mnt/@/var &>/dev/null
+btrfs subvolume create /mnt/@/var/log &>/dev/null
+btrfs subvolume create /mnt/@/var/cache &>/dev/null
+btrfs subvolume create /mnt/@/var/tmp &>/dev/null
+mkdir -p /mnt/@/var/lib/libvirt &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/libvirt/images &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/machines &>/dev/null
+
+chattr +C /mnt/@/var/log
+chattr +C /mnt/@/var/cache
+chattr +C /mnt/@/var/tmp
+chattr +C /mnt/@/var/lib/libvirt/images
+chattr +C /mnt/@/var/lib/machines
+
+#Set the default ROOT Subvol to Snapshot 1 before pacstrapping
+btrfs subvolume set-default "$(btrfs subvolume list /mnt | grep "@/.snapshots/1/snapshot" | grep -oP '(?<=ID )[0-9]+')" /mnt
+
+DATE=`date +"%Y-%m-%d %H:%M:%S"`
+
+cat << EOF >> /mnt/@/.snapshots/1/info.xml
+<?xml version="1.0"?>
+<snapshot>
+  <type>single</type>
+  <num>1</num>
+  <date>$DATE</date>
+  <description>First Root Filesystem</description>
+  <cleanup>number</cleanup>
+</snapshot>
+EOF
+
+chmod 600 /mnt/@/.snapshots/1/info.xml
+
+# Mounting the newly created subvolumes
+umount /mnt
+
+echo -ne "
+-------------------------------------------------------------------------
+                Mounting the newly created subvolumes
+-------------------------------------------------------------------------
+"
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,ssd $ROOT /mnt
+mkdir -p /mnt/{boot/grub,home,.snapshots,tmp,/var/log,/var/cache,/var/tmp,/var/lib/libvirt/images,/var/lib/machines}
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,ssd $HOME /mnt/home
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodev,nosuid,noexec,subvol=@/boot/grub $ROOT /mnt/boot/grub
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,subvol=@/.snapshots $ROOT /mnt/.snapshots
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/log $ROOT /mnt/var/log
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/cache $ROOT /mnt/var/cache
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,subvol=@/var/tmp $ROOT /mnt/var/tmp
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
+mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
+
+mkdir -p /mnt/boot/efi
+mount -o nodev,nosuid,noexec $ESP /mnt/boot/efi
 
