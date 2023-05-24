@@ -167,6 +167,68 @@ mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=a
 mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
 
+mount -o nodev,nosuid,noexec $BOOT /mnt/boot
 mkdir -p /mnt/boot/efi
+
 mount -o nodev,nosuid,noexec $ESP /mnt/boot/efi
+
+udevadm trigger
+
+mkdir -p /mnt/{proc,sys,dev/pts}
+mount -t proc proc /mnt/proc
+mount -t sysfs sys /mnt/sys
+mount -B /dev /mnt/dev
+mount -t devpts pts /mnt/dev/pts
+
+
+source /etc/os-release
+export VERSION_ID="$VERSION_ID"
+
+dnf --installroot=/mnt --releasever=$VERSION_ID groupinstall -y core
+
+dnf --installroot=/mnt install -y glibc-langpack-en
+
+mv /mnt/etc/resolv.conf /mnt/etc/resolv.conf.orig
+cp -L /etc/resolv.conf /mnt/etc
+
+dnf install -y arch-install-scripts
+
+genfstab -U /mnt >> /mnt/etc/fstab
+
+# Remove /dev/zram0 partition from /mnt/etc/fstab
+
+chroot /mnt /bin/bash
+
+mount -a
+
+mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+fixfiles -F onboot
+
+dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64
+
+rm /boot/efi/EFI/fedora/grub.cfg -y
+rm /boot/grub2/grub.cfg -y
+
+dnf reinstall -y shim-* grub2-efi-* grub2-common
+
+cat > /etc/default/grub <<EOF
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DEFAULT=saved
+GRUB_DISABLE_SUBMENU=true
+GRUB_TERMINAL_OUTPUT="console"
+GRUB_CMDLINE_LINUX="rhgb"
+GRUB_DISABLE_RECOVERY="true"
+GRUB_ENABLE_BLSCFG=true
+EOF
+
+efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
+
+grub2-mkconfig -o /boot/grub2/grub.cfg
+
+rm -f /etc/localtime
+systemd-firstboot --prompt
+
+passwd
+
 
