@@ -197,38 +197,38 @@ genfstab -U /mnt >> /mnt/etc/fstab
 
 # Remove /dev/zram0 partition from /mnt/etc/fstab
 
-chroot /mnt /bin/bash
+chroot /mnt /bin/bash -e <<EOF
 
-mount -a
+  mount -a
 
-mount -t efivarfs efivarfs /sys/firmware/efi/efivars
-fixfiles -F onboot
+  mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+  fixfiles -F onboot
 
-dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64
+  dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64
 
-rm /boot/efi/EFI/fedora/grub.cfg -y
-rm /boot/grub2/grub.cfg -y
+  rm /boot/efi/EFI/fedora/grub.cfg -y
+  rm /boot/grub2/grub.cfg -y
 
-dnf reinstall -y shim-* grub2-efi-* grub2-common
+  dnf reinstall -y shim-* grub2-efi-* grub2-common
 
-cat > /etc/default/grub <<EOF
-GRUB_TIMEOUT=5
-GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
-GRUB_DEFAULT=saved
-GRUB_DISABLE_SUBMENU=true
-GRUB_TERMINAL_OUTPUT="console"
-GRUB_CMDLINE_LINUX="rhgb"
-GRUB_DISABLE_RECOVERY="true"
-GRUB_ENABLE_BLSCFG=true
+  cat > /etc/default/grub <<EOF
+  GRUB_TIMEOUT=5
+  GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+  GRUB_DEFAULT=saved
+  GRUB_DISABLE_SUBMENU=true
+  GRUB_TERMINAL_OUTPUT="console"
+  GRUB_CMDLINE_LINUX="rhgb"
+  GRUB_DISABLE_RECOVERY="true"
+  GRUB_ENABLE_BLSCFG=true
+  EOF
+
+  efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
+
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+
+  rm -f /etc/localtime
+  systemd-firstboot --prompt
+
+  passwd
+
 EOF
-
-efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
-
-grub2-mkconfig -o /boot/grub2/grub.cfg
-
-rm -f /etc/localtime
-systemd-firstboot --prompt
-
-passwd
-
-
