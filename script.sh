@@ -205,7 +205,8 @@ chroot /mnt /bin/bash -e <<EOF
   fixfiles -F onboot
 
   dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64
-
+  
+  # ****search for rm -y option****
   rm /boot/efi/EFI/fedora/grub.cfg -y
   rm /boot/grub2/grub.cfg -y
 
