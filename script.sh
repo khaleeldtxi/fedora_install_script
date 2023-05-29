@@ -347,6 +347,7 @@ chroot /mnt /bin/bash -e <<EOF
   GRUB_ENABLE_BLSCFG=true
   EOF
 
+
   efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
 
   grub2-mkconfig -o /boot/grub2/grub.cfg
