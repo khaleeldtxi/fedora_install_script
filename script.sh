@@ -9,7 +9,7 @@ timedatectl set-ntp true
 
 echo -e "\nmax_parallel_downloads=10\nfastestmirror=True\ndefaultyes=True\n" >> /etc/dnf/dnf.conf
 
-serinfo () {
+userinfo () {
 # Enter username
 
 read -p "Please enter your username: " username
