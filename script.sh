@@ -336,7 +336,7 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Reinstall grub packages"
   dnf reinstall -y shim-* grub2-efi-* grub2-common
 
-  cat > /etc/default/grub <<EOF
+  cat > /etc/default/grub <<-'EOF'
   GRUB_TIMEOUT=5
   GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
   GRUB_DEFAULT=saved
@@ -353,7 +353,10 @@ chroot /mnt /bin/bash -e <<EOF
 
   rm -f /etc/localtime
   
-  cho "systemd-firstboot"
+  echo "Set shutdown timeout"
+  sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
+  
+  echo "systemd-firstboot"
   systemd-firstboot --prompt
 
   passwd
