@@ -336,7 +336,7 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Reinstall grub packages"
   dnf reinstall -y shim-* grub2-efi-* grub2-common
 
-  cat > /etc/default/grub <<-'EOF'
+  bash -c 'cat > /etc/default/grub' <<-'EOF'
   GRUB_TIMEOUT=5
   GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
   GRUB_DEFAULT=saved
