@@ -409,28 +409,53 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Set shutdown timeout"
   sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
   
-   echo -ne "
-    -------------------------------------------------------------------------
-                        Setting root & user password
-    -------------------------------------------------------------------------
-    "
+  echo -ne "
+  -------------------------------------------------------------------------
+                      Setting root & user password
+  -------------------------------------------------------------------------
+  "
+   
+  # Giving wheel user sudo access
+  echo -e "$root_password\n$root_password" | passwd root
+  usermod -aG wheel root
+  useradd -m $username
+  usermod -aG wheel $username
+  gpasswd -a $username libvirt
+  usermod -aG libvirt -s /bin/bash $username
+  usermod -a -G wheel "$username" && mkdir -p /home/"$username" && chown "$username":wheel /home/"$username"
+  echo -e "$password\n$password" | passwd $username
+  groupadd -r audit
+  usermod -aG audit $username
+  gpasswd -a $username audit
+  sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/g' /etc/sudoers
+  echo "$username ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+  chown $username:$username /home/$username
+  
+  echo -e "\n#GTK_USE_PORTAL=1\n" >> /etc/environment
+  # Enabling audit service
+  echo "Enabling audit service"
+  systemctl enable auditd &>/dev/null
+
+  # Enabling auto-trimming service
+  echo "Enabling auto-trimming service"
+  systemctl enable fstrim.timer &>/dev/null
+
+  # Enabling NetworkManager
+  echo "Enabling NetworkManager"
+  systemctl enable NetworkManager &>/dev/null
+  systemctl enable systemd-resolved &>/dev/nul
     
-    # Giving wheel user sudo access
-    echo -e "$root_password\n$root_password" | passwd root
-    usermod -aG wheel root
-    useradd -m $username
-    usermod -aG wheel $username
-    gpasswd -a $username libvirt
-    usermod -aG libvirt -s /bin/bash $username
-    usermod -a -G wheel "$username" && mkdir -p /home/"$username" && chown "$username":wheel /home/"$username"
-    echo -e "$password\n$password" | passwd $username
-    groupadd -r audit
-    usermod -aG audit $username
-    gpasswd -a $username audit
-    sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/g' /etc/sudoers
-    echo "$username ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-    chown $username:$username /home/$username
+  # Setting umask to 077
+  sed -i 's/022/077/g' /etc/profile
+  echo "" >> /etc/bash.bashrc
+  echo "umask 077" >> /etc/bash.bashrc
+  echo "Setting umask to 077 - Done"
     
+  # Enabling systemd-oomd
+  systemctl enable systemd-oomd &>/dev/null
+  echo "Enabled systemd-oomd."
+  
+  
   #echo "systemd-firstboot"
   #systemd-firstboot --prompt
 
