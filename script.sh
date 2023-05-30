@@ -281,6 +281,48 @@ cp -L /etc/resolv.conf /mnt/etc
 echo "Install arch-install-scripts"
 dnf install -y arch-install-scripts
 
+echo -e "# Booting with ROOT subvolume\nGRUB_ROOT_OVERRIDE_BOOT_PARTITION_DETECTION=true" >> /mnt/etc/default/grub
+sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/10_linux
+sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/20_linux_xen
+
+# Disable su for non-wheel users
+echo "Disable su for non-wheel users"
+bash -c 'cat > /mnt/etc/pam.d/su' <<-'EOF'
+#%PAM-1.0
+auth		sufficient	pam_rootok.so
+# Uncomment the following line to implicitly trust users in the "wheel" group.
+#auth		sufficient	pam_wheel.so trust use_uid
+# Uncomment the following line to require a user to be in the "wheel" group.
+auth		required	pam_wheel.so use_uid
+auth		required	pam_unix.so
+account		required	pam_unix.so
+session		required	pam_unix.so
+EOF
+
+# Randomize Mac Address
+echo "Randomize Mac Address"
+bash -c 'cat > /mnt/etc/NetworkManager/conf.d/00-macrandomize.conf' <<-'EOF'
+[device]
+wifi.scan-rand-mac-address=yes
+[connection]
+wifi.cloned-mac-address=random
+ethernet.cloned-mac-address=random
+connection.stable-id=${CONNECTION}/${BOOT}
+EOF
+
+chmod 600 /mnt/etc/NetworkManager/conf.d/00-macrandomize.conf
+
+# Disable Connectivity Check.
+echo "Disable Connectivity Check"
+bash -c 'cat > /mnt/etc/NetworkManager/conf.d/20-connectivity.conf' <<-'EOF'
+[connectivity]
+uri=http://www.archlinux.org/check_network_status.txt
+interval=0
+EOF
+
+chmod 600 /mnt/etc/NetworkManager/conf.d/20-connectivity.conf
+
+
 echo "Generate fstab"
 genfstab -U /mnt >> /mnt/etc/fstab
 
@@ -329,6 +371,16 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Setting up timezone"
   ln -sf /usr/share/zoneinfo/$time_zone /etc/localtime &>/dev/null
   
+  # Snapper configuration
+  echo "Configuring Snapper"
+  umount /.snapshots
+  rm -r /.snapshots
+  snapper --no-dbus -c root create-config /
+  btrfs subvolume delete /.snapshots
+  mkdir /.snapshots
+  mount -a
+  chmod 750 /.snapshots
+  
   echo "Remove default grub packages"
   rm /boot/efi/EFI/fedora/grub.cfg -f
   rm /boot/grub2/grub.cfg -f
@@ -354,12 +406,33 @@ chroot /mnt /bin/bash -e <<EOF
 
   #rm -f /etc/localtime
   
-  #echo "Set shutdown timeout"
-  #sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
+  echo "Set shutdown timeout"
+  sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
   
+   echo -ne "
+    -------------------------------------------------------------------------
+                        Setting root & user password
+    -------------------------------------------------------------------------
+    "
+    
+    # Giving wheel user sudo access
+    echo -e "$root_password\n$root_password" | passwd root
+    usermod -aG wheel root
+    useradd -m $username
+    usermod -aG wheel $username
+    gpasswd -a $username libvirt
+    usermod -aG libvirt -s /bin/bash $username
+    usermod -a -G wheel "$username" && mkdir -p /home/"$username" && chown "$username":wheel /home/"$username"
+    echo -e "$password\n$password" | passwd $username
+    groupadd -r audit
+    usermod -aG audit $username
+    gpasswd -a $username audit
+    sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/g' /etc/sudoers
+    echo "$username ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+    chown $username:$username /home/$username
+    
   #echo "systemd-firstboot"
   #systemd-firstboot --prompt
 
-  #passwd
-
+  
 EOF
