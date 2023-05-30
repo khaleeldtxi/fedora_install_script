@@ -345,7 +345,7 @@ chroot /mnt /bin/bash -e <<EOF
   GRUB_CMDLINE_LINUX="rhgb"
   GRUB_DISABLE_RECOVERY="true"
   GRUB_ENABLE_BLSCFG=true
-  EOF
+  'EOF'
 
 
   efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
