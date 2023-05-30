@@ -336,7 +336,7 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Reinstall grub packages"
   dnf reinstall -y shim-* grub2-efi-* grub2-common
 
-  bash -c 'cat > /etc/default/grub' <<-'EOF'
+  bash -c 'cat > /etc/default/grub' <<EOF
   GRUB_TIMEOUT=5
   GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
   GRUB_DEFAULT=saved
@@ -345,7 +345,7 @@ chroot /mnt /bin/bash -e <<EOF
   GRUB_CMDLINE_LINUX="rhgb"
   GRUB_DISABLE_RECOVERY="true"
   GRUB_ENABLE_BLSCFG=true
-  'EOF'
+  EOF
 
 
   efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
