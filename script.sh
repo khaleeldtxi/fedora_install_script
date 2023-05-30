@@ -323,6 +323,9 @@ EOF
 chmod 600 /mnt/etc/NetworkManager/conf.d/20-connectivity.conf
 
 
+# Disable NetworkManager Wait Service (due to long boot times). You might want to ignore this if you are a laptop user.
+sudo systemctl disable NetworkManager-wait-online.service
+
 echo "Generate fstab"
 genfstab -U /mnt >> /mnt/etc/fstab
 
@@ -455,6 +458,69 @@ chroot /mnt /bin/bash -e <<EOF
   systemctl enable systemd-oomd &>/dev/null
   echo "Enabled systemd-oomd."
   
+  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+  echo "install dnf-plugins-core"
+  sudo dnf -y install dnf-plugins-core
+  sudo dnf config-manager \
+      --add-repo \
+      		https://download.docker.com/linux/fedora/docker-ce.repo
+    
+  sudo dnf install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  sudo systemctl start docker
+    
+  # Install third-party repositories (Via RPMFusion).
+  sudo dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
+  sudo dnf group update core -y
+
+  # Enable Flatpaks.
+  sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && sudo flatpak remote-add --if-not-exists flathub-beta https://flathub.org/beta-repo/flathub-beta.flatpakrepo
+
+  # Enable System Theming with Flatpak (That way, theming is more consistent between native apps and flatpaks).
+  sudo flatpak override --filesystem=xdg-config/gtk-3.0
+  
+  # Install fastfetch.
+  sudo dnf install fastfetch -y
+  mkdir ~/.config/fastfetch
+
+  # Set up fastfetch with my preferred configuration.
+  wget -O ~/.config/fastfetch/config.conf https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/.config/fastfetch/config.conf
+  wget -O ~/.config/fastfetch/uoh.ascii https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/.config/fastfetch/uoh.ascii
+
+  # Install exa and lsd, which should replace lsd and dir. Also install thefuck for terminal command corrections, and fzf.
+  sudo dnf install exa lsd thefuck fzf htop cmatrix -y
+
+  # Install zsh, alongside setting up oh-my-zsh, and powerlevel10k.
+  sudo dnf install zsh -y && chsh -s $(which zsh) && sudo chsh -s $(which zsh)
+  sudo dnf install git git-lfs -y && sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"c
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+  wget -O ~/.p10k.zsh https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/p10k.zsh
+
+  # Set up Powerlevel10k as the default zsh theme, alongside enabling some tweaks.
+  sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k/powerlevel10k"/g' ~/.zshrc
+  echo "# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+  [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> tee -a ~/.zshrc
+  echo "typeset -g POWERLEVEL9K_INSTANT_PROMPT=off" >> tee -a ~/.zshrc
+
+  # Set up some ZSH plugins
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+  sed -i 's/plugins=(git)/plugins=(git emoji zsh-syntax-highlighting zsh-autosuggestions)/g' ~/.zshrc
+
+  ## Add nerd-fonts for Noto and SourceCodePro font families. This will just install everything together, but I give no fucks at this point, just want things a little easier to set up.
+  git clone https://github.com/ryanoasis/nerd-fonts.git && cd nerd-fonts && ./install.sh && cd .. && sudo rm -rf nerd-fonts
+
+  # Append exa and lsd aliases, and neofetch alias to both the bashrc and zshrc.
+  echo "if [ -x /usr/bin/lsd ]; then
+    alias ls='lsd'
+    alias dir='lsd -l'
+    alias lah='lsd -lah'
+    alias lt='lsd --tree'
+  fi" >> tee -a ~/.bashrc ~/.zshrc
+  echo "eval $(thefuck --alias)
+  eval $(thefuck --alias fix) # Allows triggering thefuck using the keyword 'fix'." >> tee -a ~/.bashrc ~/.zshrc
+  echo "alias neofetch='fastfetch'
+  neofetch" >> tee -a ~/.bashrc ~/.zshrc
   
   #echo "systemd-firstboot"
   #systemd-firstboot --prompt
