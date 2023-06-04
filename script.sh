@@ -391,23 +391,23 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Reinstall grub packages"
   dnf reinstall -y shim-* grub2-efi-* grub2-common
 
-  #bash -c 'cat > /etc/default/grub' <<EOF
-  #GRUB_TIMEOUT=5
-  #GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+  bash -c "cat > /etc/default/grub" <<-'EOF'
+  GRUB_TIMEOUT=5
+  GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
   #GRUB_DEFAULT=saved
   #GRUB_DISABLE_SUBMENU=true
   #GRUB_TERMINAL_OUTPUT="console"
   #GRUB_CMDLINE_LINUX="rhgb"
   #GRUB_DISABLE_RECOVERY="true"
   #GRUB_ENABLE_BLSCFG=true
-  #EOF
+  EOF
 
 
   #efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
 
   #grub2-mkconfig -o /boot/grub2/grub.cfg
 
-  #rm -f /etc/localtime
+  rm -f /etc/localtime
   
   echo "Set shutdown timeout"
   sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
@@ -423,8 +423,8 @@ chroot /mnt /bin/bash -e <<EOF
   usermod -aG wheel root
   useradd -m $username
   usermod -aG wheel $username
-  gpasswd -a $username libvirt
-  usermod -aG libvirt -s /bin/bash $username
+  #gpasswd -a $username libvirt
+  #usermod -aG libvirt -s /bin/bash $username
   usermod -a -G wheel "$username" && mkdir -p /home/"$username" && chown "$username":wheel /home/"$username"
   echo -e "$password\n$password" | passwd $username
   groupadd -r audit
@@ -458,8 +458,6 @@ chroot /mnt /bin/bash -e <<EOF
   systemctl enable systemd-oomd &>/dev/null
   echo "Enabled systemd-oomd."
   
-  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-
   echo "install dnf-plugins-core"
   sudo dnf -y install dnf-plugins-core
   sudo dnf config-manager \
