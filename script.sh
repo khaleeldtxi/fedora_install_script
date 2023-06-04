@@ -384,29 +384,6 @@ chroot /mnt /bin/bash -e <<EOF
   mount -a
   chmod 750 /.snapshots
   
-  echo "Remove default grub packages"
-  rm /boot/efi/EFI/fedora/grub.cfg -f
-  rm /boot/grub2/grub.cfg -f
-  
-  echo "Reinstall grub packages"
-  dnf reinstall -y shim-* grub2-efi-* grub2-common
-
-  bash -c "cat > /etc/default/grub" <<-'EOF'
-  GRUB_TIMEOUT=5
-  GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
-  #GRUB_DEFAULT=saved
-  #GRUB_DISABLE_SUBMENU=true
-  #GRUB_TERMINAL_OUTPUT="console"
-  #GRUB_CMDLINE_LINUX="rhgb"
-  #GRUB_DISABLE_RECOVERY="true"
-  #GRUB_ENABLE_BLSCFG=true
-  EOF
-
-
-  #efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
-
-  #grub2-mkconfig -o /boot/grub2/grub.cfg
-
   rm -f /etc/localtime
   
   echo "Set shutdown timeout"
@@ -525,3 +502,26 @@ chroot /mnt /bin/bash -e <<EOF
 
   
 EOF
+
+ echo "Remove default grub packages"
+ rm /mnt/boot/efi/EFI/fedora/grub.cfg -f
+ rm /mnt/boot/grub2/grub.cfg -f
+  
+ echo "Reinstall grub packages"
+ dnf reinstall -y shim-* grub2-efi-* grub2-common
+
+ bash -c "cat > /mnt/etc/default/grub" <<-'EOF'
+ GRUB_TIMEOUT=5
+ GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+ GRUB_DEFAULT=saved
+ GRUB_DISABLE_SUBMENU=true
+ GRUB_TERMINAL_OUTPUT="console"
+ GRUB_CMDLINE_LINUX="rhgb"
+ GRUB_DISABLE_RECOVERY="true"
+ GRUB_ENABLE_BLSCFG=true
+ EOF
+
+
+ #efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
+
+ grub2-mkconfig -o /mnt/boot/grub2/grub.cfg
