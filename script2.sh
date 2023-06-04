@@ -489,16 +489,16 @@ chroot /mnt /bin/bash -e <<EOF
   #systemd-firstboot --prompt
   
   
-  bash -c "cat > /mnt/etc/default/grub" <<-'EOF'
-  GRUB_TIMEOUT=5
-  GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
-  GRUB_DEFAULT=saved
-  GRUB_DISABLE_SUBMENU=true
-  GRUB_TERMINAL_OUTPUT="console"
-  GRUB_CMDLINE_LINUX="rhgb"
-  GRUB_DISABLE_RECOVERY="true"
-  GRUB_ENABLE_BLSCFG=true
-  EOF
+  #bash -c "cat > /mnt/etc/default/grub" <<-'EOF'
+  #GRUB_TIMEOUT=5
+  #GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+  #GRUB_DEFAULT=saved
+  #GRUB_DISABLE_SUBMENU=true
+  #GRUB_TERMINAL_OUTPUT="console"
+  #GRUB_CMDLINE_LINUX="rhgb"
+  #GRUB_DISABLE_RECOVERY="true"
+  #GRUB_ENABLE_BLSCFG=true
+  #EOF
 
   # Snapper configuration
   echo "Configuring Snapper"
