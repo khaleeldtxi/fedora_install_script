@@ -204,6 +204,8 @@ btrfs subvolume create /mnt/@/var/crash &>/dev/null
 btrfs subvolume create /mnt/@/var/tmp &>/dev/null
 btrfs subvolume create /mnt/@/var/spool &>/dev/null
 mkdir -p /mnt/@/var/lib/libvirt &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/AccountsService &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/sddm &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/libvirt/images &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/machines &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/portables &>/dev/null
@@ -279,6 +281,8 @@ mkdir -p /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/portables $ROOT /mnt/var/lib/portables
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/AccountsService $ROOT /mnt/var/lib/AccountsService
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/sddm $ROOT /mnt/var/lib/sddm
 mkdir -p /mnt/home/$username/windows-c
 mount -o ntfs /dev/sda2 /mnt/home/$username/windows-c
 
@@ -396,7 +400,7 @@ chroot /mnt /bin/bash -e <<EOF
   mount -t efivarfs efivarfs /sys/firmware/efi/efivars
   fixfiles -F onboot
   echo "Install grub packages"
-  dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64 snapper
+  dnf install -y btrfs-progs efi-filesystem efibootmgr fwupd grub2-common grub2-efi-ia32 grub2-efi-x64 grub2-pc grub2-pc-modules grub2-tools grub2-tools-efi grub2-tools-extra grub2-tools-minimal grubby kernel mactel-boot mokutil shim-ia32 shim-x64
   
   # Setting up timezone
   echo "Setting up timezone"
@@ -538,8 +542,6 @@ EOF
   
 #echo "Reinstall grub packages"
 #dnf reinstall -y shim-* grub2-efi-* grub2-common
-
-
 
 
 sudo bash -c 'cat >> /mnt/etc/dnf/dnf.conf' <<EOF
