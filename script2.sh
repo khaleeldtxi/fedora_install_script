@@ -258,7 +258,7 @@ echo -ne "
 -------------------------------------------------------------------------
 "
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,discard=async,commit=120,ssd $ROOT /mnt
-mkdir -p /mnt/{boot/grub,home,.snapshots,opt,root,srv,usr/local,var/{cache,crash,lib/{containers,docker,flatpak,libvirt,machines,portables},log,spool,tmp}}
+mkdir -p /mnt/{boot/grub,home,.snapshots,opt,root,srv,usr/local,var/{cache,crash,lib/{AccountsService,sddm,containers,docker,flatpak,libvirt,machines,portables},log,spool,tmp}}
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/.snapshots $ROOT /mnt/.snapshots
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,commit=120,ssd,subvol=@/home $ROOT /mnt/home
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/boot/grub $ROOT /mnt/boot/grub
@@ -273,7 +273,7 @@ mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,comm
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,nodev,nosuid,noexec,subvol=@/var/crash $ROOT /mnt/var/crash
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/containers $ROOT /mnt/var/lib/containers
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker $ROOT /mnt/var/lib/docker
-mkdir -p /mnt/var/lib/docker/btrfs/
+mkdir -p /mnt/var/lib/docker/btrfs/subvolumes
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker/btrfs/subvolumes $ROOT /mnt/var/lib/docker/btrfs/subvolumes
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/flatpak $ROOT /mnt/var/lib/flatpak
 #mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt $ROOT /mnt/var/lib/libvirt
