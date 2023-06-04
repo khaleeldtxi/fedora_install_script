@@ -7,7 +7,12 @@ setenforce 0
 
 timedatectl set-ntp true
 
-echo -e "\nmax_parallel_downloads=10\nfastestmirror=True\ndefaultyes=True\ndeltarpm=True\n" >> /etc/dnf/dnf.conf
+sudo bash -c 'cat >> /etc/dnf/dnf.conf' <<EOF
+defaultyes=True
+fastestmirror=True
+max_parallel_downloads=10
+deltarpm=True
+EOF
 
 userinfo () {
 # Enter username
@@ -78,6 +83,7 @@ Please select key board layout from this list
     -ua
     -uk
     -us
+    -in-eng
 "
 read -p "Your key boards layout:" keymap
 }
@@ -87,7 +93,7 @@ keymap
 clear
 
 # Enter locale
-read -r -p "Please insert the locale you use (in this format: en_US): " locale
+read -r -p "Please insert the locale you use (in this format: en_US or en_IN): " locale
 
 
 
@@ -168,6 +174,10 @@ fi
 # Formatting the ESP as FAT32
 echo -e "\nFormatting the EFI Partition as FAT32.\n$HR"
 mkfs.fat -F 32 -n EFI $ESP &>/dev/null
+
+# Formatting the BOOT as ext4
+echo -e "\nFormatting the Boot Partition as ext4.\n$HR"
+mkfs.ext4 -F -L EFI $BOOT &>/dev/null
 
 # Formatting the partition as ROOT
 echo "Formatting the Root & Home partition as btrfs."
@@ -267,7 +277,7 @@ mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,comm
 mkdir -p /mnt/var/lib/docker/btrfs/subvolumes
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker/btrfs/subvolumes $ROOT /mnt/var/lib/docker/btrfs/subvolumes
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/flatpak $ROOT /mnt/var/lib/flatpak
-mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt $ROOT /mnt/var/lib/libvirt
 mkdir -p /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
@@ -294,8 +304,9 @@ export VERSION_ID="$VERSION_ID"
 echo "Install Fedora Core"
 dnf --installroot=/mnt --releasever=$VERSION_ID groupinstall -y core
 
-echo "Install glibc-langpack-en"
-dnf --installroot=/mnt install -y glibc-langpack-en
+echo "Install glibc-langpack-en, vim, inotify-tools, make"
+dnf --installroot=/mnt install -y glibc-langpack-en vim inotify-tools make
+dnf --installroot=/mnt groupinstall -y "KDE Plasma Workspaces"
 
 mv /mnt/etc/resolv.conf /mnt/etc/resolv.conf.orig
 cp -L /etc/resolv.conf /mnt/etc
@@ -375,6 +386,7 @@ echo "LANG=$locale.UTF-8" > /mnt/etc/locale.conf
 # Setting up keyboard layout.
 echo "Setting up keyboard layout"
 echo "KEYMAP=$keymap" > /mnt/etc/vconsole.conf
+echo '\nFONT="eurlatgr"' >> /mnt/etc/vconsole.conf
 
 echo -e "# Booting with ROOT subvolume\nGRUB_ROOT_OVERRIDE_BOOT_PARTITION_DETECTION=true" >> /mnt/etc/default/grub
 sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/10_linux
@@ -396,17 +408,7 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Setting up timezone"
   ln -sf /usr/share/zoneinfo/$time_zone /etc/localtime &>/dev/null
   
-  # Snapper configuration
-  echo "Configuring Snapper"
-  umount /.snapshots
-  rm -r /.snapshots
-  snapper --no-dbus -c root create-config /
-  btrfs subvolume delete /.snapshots
-  mkdir /.snapshots
-  mount -a
-  chmod 750 /.snapshots
-  
-  rm -f /etc/localtime
+  #rm -f /etc/localtime
   
   echo "Set shutdown timeout"
   sed -i 's/.*DefaultTimeoutStopSec=.*$/DefaultTimeoutStopSec=5s/g' /etc/systemd/system.conf
@@ -434,6 +436,7 @@ chroot /mnt /bin/bash -e <<EOF
   chown $username:$username /home/$username
   
   echo -e "\n#GTK_USE_PORTAL=1\n" >> /etc/environment
+  
   # Enabling audit service
   echo "Enabling audit service"
   systemctl enable auditd &>/dev/null
@@ -463,28 +466,28 @@ chroot /mnt /bin/bash -e <<EOF
       --add-repo \
       		https://download.docker.com/linux/fedora/docker-ce.repo
     
-  sudo dnf install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   sudo systemctl start docker
     
-  # Install third-party repositories (Via RPMFusion).
+  # Install third-party repositories (Via RPMFusion)
   sudo dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
   sudo dnf group update core -y
 
-  # Enable Flatpaks.
+  # Enable Flatpaks
   sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && sudo flatpak remote-add --if-not-exists flathub-beta https://flathub.org/beta-repo/flathub-beta.flatpakrepo
 
-  # Enable System Theming with Flatpak (That way, theming is more consistent between native apps and flatpaks).
+  # Enable System Theming with Flatpak (That way, theming is more consistent between native apps and flatpaks)
   sudo flatpak override --filesystem=xdg-config/gtk-3.0
   
-  # Install fastfetch.
+  # Install fastfetch
   sudo dnf install fastfetch -y
   mkdir ~/.config/fastfetch
 
-  # Set up fastfetch with my preferred configuration.
+  # Set up fastfetch with my preferred configuration
   wget -O ~/.config/fastfetch/config.conf https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/.config/fastfetch/config.conf
   wget -O ~/.config/fastfetch/uoh.ascii https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/.config/fastfetch/uoh.ascii
 
-  # Install exa and lsd, which should replace lsd and dir. Also install thefuck for terminal command corrections, and fzf.
+  # Install exa and lsd, which should replace lsd and dir. Also install thefuck for terminal command corrections, and fzf
   sudo dnf install exa lsd thefuck fzf htop cmatrix -y
 
   # Install zsh, alongside setting up oh-my-zsh, and powerlevel10k.
@@ -522,6 +525,35 @@ chroot /mnt /bin/bash -e <<EOF
   #echo "systemd-firstboot"
   #systemd-firstboot --prompt
 
+  # Snapper configuration
+  echo "Configuring Snapper"
+  sudo dnf install -y snapper python3-dnf-plugin-snapper
+  umount /.snapshots
+  rm -r /.snapshots
+  snapper --no-dbus -c root create-config /
+  btrfs subvolume delete /.snapshots
+  mkdir /.snapshots
+  mount -a
+  chmod 750 /.snapshots
+  snapper -c root set-config ALLOW_USERS=$USER SYNC_ACL=yes
+  echo 'PRUNENAMES = ".snapshots"' | sudo tee -a /etc/updatedb.conf
+  echo 'SUSE_BTRFS_SNAPSHOT_BOOTING="true"' | sudo tee -a /etc/default/grub
+  sed -i '1i set btrfs_relative_path="yes"' /boot/efi/EFI/fedora/grub.cfg
+  grub2-editenv - unset menu_auto_hide
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+  
+  echo "Install and Configure Grub-Btrfs"
+  git clone https://github.com/Antynea/grub-btrfs
+  cd grub-btrfs
+  sed -i '/#GRUB_BTRFS_SNAPSHOT_KERNEL/a GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="systemd.volatile=state"' config
+  sed -i '/#GRUB_BTRFS_GRUB_DIRNAME/a GRUB_BTRFS_GRUB_DIRNAME="/boot/grub2"' config
+  sed -i '/#GRUB_BTRFS_MKCONFIG=/a GRUB_BTRFS_MKCONFIG=/sbin/grub2-mkconfig' config
+  sed -i '/#GRUB_BTRFS_SCRIPT_CHECK=/a GRUB_BTRFS_SCRIPT_CHECK=grub2-script-check' config
+  make install
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+  systemctl enable --now grub-btrfsd.service
+  cd ..
+  rm -rvf grub-btrfs
   
 EOF
 
@@ -545,7 +577,20 @@ EOF
 
 #efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
 
-sudo grub2-editenv - unset menu_auto_hide
-sudo grub2-mkconfig -o /mnt/boot/grub2/grub.cfg
+sudo bash -c 'cat >> /mnt/etc/dnf/dnf.conf' <<EOF
+defaultyes=True
+fastestmirror=True
+max_parallel_downloads=10
+deltarpm=True
+EOF
+
+sudo chmod 1777 /mnt/var/tmp
+#sudo chmod 1770 /mnt/var/lib/sddm
+sudo chown -R $USER: /mnt/home/$USER/.mozilla
+
+#sudo systemctl daemon-reload
+#sudo mount -va
+
+
 
 
