@@ -127,18 +127,21 @@ if [[ "$response" =~ ^(yes|y)$ ]]; then
     
     # create partitions
     echo "create partitions"
-    sgdisk -n 1:0:+512M ${DISK} # partition 1 (UEFI), default start block, 1024MB
-    sgdisk -n 2:0:0 ${DISK} # partition 2 (Root), default start block, remaining
+    sgdisk -n 1:0:+512M ${DISK} # partition 1 (EFI), default start block, 1024MB
+    sgdisk -n 2:0:+1G ${DISK} # partition 2 (Boot), default start block, 1024MB
+    sgdisk -n 3:0:0 ${DISK} # partition 2 (Root), default start block, remaining
     
     # set partition types
     echo "set partition types"
     sgdisk -t 1:ef00 ${DISK}
     sgdisk -t 2:8300 ${DISK}
+    sgdisk -t 3:8300 ${DISK}
 
     # label partitions
     echo "label partitions"
     sgdisk -c 1:"ESP" ${DISK}
-    sgdisk -c 2:"ROOT" ${DISK}
+    sgdisk -c 2:"BOOT" ${DISK}
+    sgdisk -c 3:"ROOT" ${DISK}
 else
     echo "Quitting."
     exit
@@ -154,10 +157,12 @@ partprobe "$DISK"
 
 if [[ "${DISK}" =~ "nvme" ]]; then
     ESP=${DISK}p1
-    ROOT=${DISK}p2
+    BOOT=${DISK}p2
+    ROOT=${DISK}p3
 else
     ESP=${DISK}1
-    ROOT=${DISK}2
+    BOOT=${DISK}2
+    ROOT=${DISK}3
 fi
 
 # Formatting the ESP as FAT32
@@ -185,7 +190,6 @@ mkdir /mnt/@/boot &>/dev/null
 btrfs subvolume create /mnt/@/boot/grub &>/dev/null
 mkdir /mnt/@/home &>/dev/null
 btrfs subvolume create /mnt/@/home &>/dev/null
-btrfs subvolume create /mnt/@/tmp &>/dev/null
 mkdir /mnt/@/var &>/dev/null
 btrfs subvolume create /mnt/@/var/log &>/dev/null
 btrfs subvolume create /mnt/@/var/cache &>/dev/null
@@ -193,7 +197,7 @@ btrfs subvolume create /mnt/@/var/crash &>/dev/null
 btrfs subvolume create /mnt/@/var/tmp &>/dev/null
 btrfs subvolume create /mnt/@/var/spool &>/dev/null
 mkdir -p /mnt/@/var/lib/libvirt &>/dev/null
-btrfs subvolume create /mnt/@/var/lib/libvirt/images &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/libvirt &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/machines &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/portables &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/flatpak &>/dev/null
@@ -204,12 +208,6 @@ btrfs subvolume create /mnt/@/usr/local &>/dev/null
 btrfs subvolume create /mnt/@/srv &>/dev/null
 btrfs subvolume create /mnt/@/root &>/dev/null
 btrfs subvolume create /mnt/@/opt &>/dev/null
-
-chattr +C /mnt/@/var/log
-chattr +C /mnt/@/var/cache
-chattr +C /mnt/@/var/tmp
-chattr +C /mnt/@/var/lib/libvirt/images
-chattr +C /mnt/@/var/lib/machines
 
 #DATE=`date +"%Y-%m-%d %H:%M:%S"`
 
@@ -228,8 +226,19 @@ EOF
 echo "Set the default ROOT Subvol to Snapshot 1 before pacstrapping"
 btrfs subvolume set-default "$(btrfs subvolume list /mnt | grep "@/.snapshots/1/snapshot" | grep -oP '(?<=ID )[0-9]+')" /mnt
 
-
 chmod 600 /mnt/@/.snapshots/1/info.xml
+
+btrfs quota enable /mnt
+
+chattr +C /mnt/@/var/log
+chattr +C /mnt/@/var/cache
+chattr +C /mnt/@/var/spool
+chattr +C /mnt/@/var/tmp
+chattr +C /mnt/@/var/lib/libvirt/images
+chattr +C /mnt/@/var/lib/machines
+
+btrfs subvolume list -t /mnt
+printf "\e[1;32m Btrfs subvolume layout with snapper rollback capabilities created. \e[0m"
 
 # Mounting the newly created subvolumes
 umount /mnt
@@ -239,17 +248,31 @@ echo -ne "
                 Mounting the newly created subvolumes
 -------------------------------------------------------------------------
 "
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,ssd $ROOT /mnt
-mkdir -p /mnt/{boot/grub,home,.snapshots,tmp,/var/log,/var/cache,/var/tmp,/var/lib/libvirt/images,/var/lib/machines}
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,ssd $HOME /mnt/home
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodev,nosuid,noexec,subvol=@/boot/grub $ROOT /mnt/boot/grub
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,subvol=@/.snapshots $ROOT /mnt/.snapshots
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,subvol=@/tmp $ROOT /mnt/tmp
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/log $ROOT /mnt/var/log
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/cache $ROOT /mnt/var/cache
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,subvol=@/var/tmp $ROOT /mnt/var/tmp
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
-mount -o lazytime,relatime,compress=zstd,space_cache=v2,autodefrag,ssd,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,discard=async,commit=120,ssd $ROOT /mnt
+mkdir -p /mnt/{boot/grub,home,.snapshots,opt,root,srv,usr/local,var/{cache,crash,lib/{containers,docker,flatpak,libvirt,machines,portables},log,spool,tmp}}
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/.snapshots $ROOT /mnt/.snapshots
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,commit=120,ssd,subvol=@/home $ROOT /mnt/home
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/boot/grub $ROOT /mnt/boot/grub
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/opt $ROOT /mnt/opt
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/root $ROOT /mnt/root
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/srv $ROOT /mnt/srv
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,subvol=@/usr/local $ROOT /mnt/usr/local
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/log $ROOT /mnt/var/log
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/spool $ROOT /mnt/var/spool
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,nodev,nosuid,noexec,subvol=@/var/cache $ROOT /mnt/var/cache
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,nodev,nosuid,subvol=@/var/tmp $ROOT /mnt/var/tmp
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,nodev,nosuid,noexec,subvol=@/var/crash $ROOT /mnt/var/crash
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/containers $ROOT /mnt/var/lib/containers
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker $ROOT /mnt/var/lib/docker
+mkdir -p /mnt/var/lib/docker/btrfs/subvolumes
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker/btrfs/subvolumes $ROOT /mnt/var/lib/docker/btrfs/subvolumes
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/flatpak $ROOT /mnt/var/lib/flatpak
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt
+mkdir -p /mnt/var/lib/libvirt/images
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
+mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/portables $ROOT /mnt/var/lib/portables
+mount -o ntfs /dev/sda2 /mnt/mnt/windows-c
 
 mount -o nodev,nosuid,noexec $BOOT /mnt/boot
 mkdir -p /mnt/boot/efi
