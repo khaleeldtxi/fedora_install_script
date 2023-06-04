@@ -129,8 +129,6 @@ if [[ "$response" =~ ^(yes|y)$ ]]; then
     sgdisk -Zo $DISK &>/dev/null
     sgdisk --zap-all $DISK &>/dev/null
     
-    read -r -p "Type Home partition size (example: 400G), remaining partition size will be allocated to the ROOT partition: " home_size
-    
     # create partitions
     echo "create partitions"
     sgdisk -n 1:0:+512M ${DISK} # partition 1 (EFI), default start block, 1024MB
@@ -198,7 +196,6 @@ mkdir /mnt/@/.snapshots/1 &>/dev/null
 btrfs subvolume create /mnt/@/.snapshots/1/snapshot &>/dev/null
 mkdir /mnt/@/boot &>/dev/null
 btrfs subvolume create /mnt/@/boot/grub &>/dev/null
-mkdir /mnt/@/home &>/dev/null
 btrfs subvolume create /mnt/@/home &>/dev/null
 mkdir /mnt/@/var &>/dev/null
 btrfs subvolume create /mnt/@/var/log &>/dev/null
@@ -207,7 +204,7 @@ btrfs subvolume create /mnt/@/var/crash &>/dev/null
 btrfs subvolume create /mnt/@/var/tmp &>/dev/null
 btrfs subvolume create /mnt/@/var/spool &>/dev/null
 mkdir -p /mnt/@/var/lib/libvirt &>/dev/null
-btrfs subvolume create /mnt/@/var/lib/libvirt &>/dev/null
+btrfs subvolume create /mnt/@/var/lib/libvirt/images &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/machines &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/portables &>/dev/null
 btrfs subvolume create /mnt/@/var/lib/flatpak &>/dev/null
@@ -274,15 +271,16 @@ mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,comm
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,nodev,nosuid,noexec,subvol=@/var/crash $ROOT /mnt/var/crash
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/containers $ROOT /mnt/var/lib/containers
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker $ROOT /mnt/var/lib/docker
-mkdir -p /mnt/var/lib/docker/btrfs/subvolumes
+mkdir -p /mnt/var/lib/docker/btrfs/
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/docker/btrfs/subvolumes $ROOT /mnt/var/lib/docker/btrfs/subvolumes
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/flatpak $ROOT /mnt/var/lib/flatpak
-mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt $ROOT /mnt/var/lib/libvirt
+#mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt $ROOT /mnt/var/lib/libvirt
 mkdir -p /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/libvirt/images $ROOT /mnt/var/lib/libvirt/images
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/machines $ROOT /mnt/var/lib/machines
 mount -o lazytime,relatime,compress=zstd:1,space_cache=v2,ssd,discard=async,commit=120,nodatacow,subvol=@/var/lib/portables $ROOT /mnt/var/lib/portables
-mount -o ntfs /dev/sda2 /mnt/mnt/windows-c
+mkdir -p /mnt/home/$username/windows-c
+mount -o ntfs /dev/sda2 /mnt/home/$username/windows-c
 
 mount -o nodev,nosuid,noexec $BOOT /mnt/boot
 mkdir -p /mnt/boot/efi
@@ -388,10 +386,6 @@ echo "Setting up keyboard layout"
 echo "KEYMAP=$keymap" > /mnt/etc/vconsole.conf
 echo '\nFONT="eurlatgr"' >> /mnt/etc/vconsole.conf
 
-echo -e "# Booting with ROOT subvolume\nGRUB_ROOT_OVERRIDE_BOOT_PARTITION_DETECTION=true" >> /mnt/etc/default/grub
-sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/10_linux
-sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/20_linux_xen
-
 # Remove /dev/zram0 partition from /mnt/etc/fstab
 
 echo "Chroot"
@@ -461,7 +455,7 @@ chroot /mnt /bin/bash -e <<EOF
   echo "Enabled systemd-oomd."
   
   echo "install dnf-plugins-core"
-  sudo dnf -y install dnf-plugins-core
+  sudo dnf -y install dnf-plugins-core podman distrobox
   sudo dnf config-manager \
       --add-repo \
       		https://download.docker.com/linux/fedora/docker-ce.repo
@@ -481,7 +475,7 @@ chroot /mnt /bin/bash -e <<EOF
   
   # Install fastfetch
   sudo dnf install fastfetch -y
-  mkdir ~/.config/fastfetch
+  mkdir -p ~/.config/fastfetch
 
   # Set up fastfetch with my preferred configuration
   wget -O ~/.config/fastfetch/config.conf https://github.com/KingKrouch/Fedora-InstallScripts/raw/main/.config/fastfetch/config.conf
@@ -490,7 +484,75 @@ chroot /mnt /bin/bash -e <<EOF
   # Install exa and lsd, which should replace lsd and dir. Also install thefuck for terminal command corrections, and fzf
   sudo dnf install exa lsd thefuck fzf htop cmatrix -y
 
-  # Install zsh, alongside setting up oh-my-zsh, and powerlevel10k.
+   
+  #echo "systemd-firstboot"
+  #systemd-firstboot --prompt
+  
+  
+  bash -c "cat > /mnt/etc/default/grub" <<-'EOF'
+  GRUB_TIMEOUT=5
+  GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+  GRUB_DEFAULT=saved
+  GRUB_DISABLE_SUBMENU=true
+  GRUB_TERMINAL_OUTPUT="console"
+  GRUB_CMDLINE_LINUX="rhgb"
+  GRUB_DISABLE_RECOVERY="true"
+  GRUB_ENABLE_BLSCFG=true
+  EOF
+
+  # Snapper configuration
+  echo "Configuring Snapper"
+  sudo dnf install -y snapper python3-dnf-plugin-snapper
+  umount /.snapshots
+  rm -r /.snapshots
+  snapper --no-dbus -c root create-config /
+  btrfs subvolume delete /.snapshots
+  mkdir /.snapshots
+  mount -a
+  chmod 750 /.snapshots
+  snapper --no-dbus -c root set-config ALLOW_USERS=$USER SYNC_ACL=yes
+  echo 'PRUNENAMES = ".snapshots"' | sudo tee -a /etc/updatedb.conf
+  echo 'SUSE_BTRFS_SNAPSHOT_BOOTING="true"' | sudo tee -a /etc/default/grub
+  sed -i '1i set btrfs_relative_path="yes"' /boot/efi/EFI/fedora/grub.cfg
+  grub2-editenv - unset menu_auto_hide
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+  
+  echo "Install and Configure Grub-Btrfs"
+  git clone https://github.com/Antynea/grub-btrfs
+  cd grub-btrfs
+  sed -i '/#GRUB_BTRFS_SNAPSHOT_KERNEL/a GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="systemd.volatile=state"' config
+  sed -i '/#GRUB_BTRFS_GRUB_DIRNAME/a GRUB_BTRFS_GRUB_DIRNAME="/boot/grub2"' config
+  sed -i '/#GRUB_BTRFS_MKCONFIG=/a GRUB_BTRFS_MKCONFIG=/sbin/grub2-mkconfig' config
+  sed -i '/#GRUB_BTRFS_SCRIPT_CHECK=/a GRUB_BTRFS_SCRIPT_CHECK=grub2-script-check' config
+  make install
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+  systemctl enable grub-btrfsd.service
+  cd ..
+  rm -rvf grub-btrfs
+  
+EOF
+
+#echo "Remove default grub packages"
+#rm /mnt/boot/efi/EFI/fedora/grub.cfg -f
+#rm /mnt/boot/grub2/grub.cfg -f
+  
+#echo "Reinstall grub packages"
+#dnf reinstall -y shim-* grub2-efi-* grub2-common
+
+
+
+
+sudo bash -c 'cat >> /mnt/etc/dnf/dnf.conf' <<EOF
+defaultyes=True
+fastestmirror=True
+max_parallel_downloads=10
+deltarpm=True
+EOF
+
+sudo chmod 1777 /mnt/var/tmp
+sudo chmod 1770 /mnt/var/lib/sddm
+
+# Install zsh, alongside setting up oh-my-zsh, and powerlevel10k.
   sudo dnf install zsh -y && chsh -s $(which zsh) && sudo chsh -s $(which zsh)
   sudo dnf install git git-lfs -y && sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"c
   git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
@@ -521,72 +583,6 @@ chroot /mnt /bin/bash -e <<EOF
   eval $(thefuck --alias fix) # Allows triggering thefuck using the keyword 'fix'." >> tee -a ~/.bashrc ~/.zshrc
   echo "alias neofetch='fastfetch'
   neofetch" >> tee -a ~/.bashrc ~/.zshrc
-  
-  #echo "systemd-firstboot"
-  #systemd-firstboot --prompt
-
-  # Snapper configuration
-  echo "Configuring Snapper"
-  sudo dnf install -y snapper python3-dnf-plugin-snapper
-  umount /.snapshots
-  rm -r /.snapshots
-  snapper --no-dbus -c root create-config /
-  btrfs subvolume delete /.snapshots
-  mkdir /.snapshots
-  mount -a
-  chmod 750 /.snapshots
-  snapper -c root set-config ALLOW_USERS=$USER SYNC_ACL=yes
-  echo 'PRUNENAMES = ".snapshots"' | sudo tee -a /etc/updatedb.conf
-  echo 'SUSE_BTRFS_SNAPSHOT_BOOTING="true"' | sudo tee -a /etc/default/grub
-  sed -i '1i set btrfs_relative_path="yes"' /boot/efi/EFI/fedora/grub.cfg
-  grub2-editenv - unset menu_auto_hide
-  grub2-mkconfig -o /boot/grub2/grub.cfg
-  
-  echo "Install and Configure Grub-Btrfs"
-  git clone https://github.com/Antynea/grub-btrfs
-  cd grub-btrfs
-  sed -i '/#GRUB_BTRFS_SNAPSHOT_KERNEL/a GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="systemd.volatile=state"' config
-  sed -i '/#GRUB_BTRFS_GRUB_DIRNAME/a GRUB_BTRFS_GRUB_DIRNAME="/boot/grub2"' config
-  sed -i '/#GRUB_BTRFS_MKCONFIG=/a GRUB_BTRFS_MKCONFIG=/sbin/grub2-mkconfig' config
-  sed -i '/#GRUB_BTRFS_SCRIPT_CHECK=/a GRUB_BTRFS_SCRIPT_CHECK=grub2-script-check' config
-  make install
-  grub2-mkconfig -o /boot/grub2/grub.cfg
-  systemctl enable --now grub-btrfsd.service
-  cd ..
-  rm -rvf grub-btrfs
-  
-EOF
-
-echo "Remove default grub packages"
-rm /mnt/boot/efi/EFI/fedora/grub.cfg -f
-rm /mnt/boot/grub2/grub.cfg -f
-  
-echo "Reinstall grub packages"
-dnf reinstall -y shim-* grub2-efi-* grub2-common
-
-bash -c "cat > /mnt/etc/default/grub" <<-'EOF'
-GRUB_TIMEOUT=5
-GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
-GRUB_DEFAULT=saved
-GRUB_DISABLE_SUBMENU=true
-GRUB_TERMINAL_OUTPUT="console"
-GRUB_CMDLINE_LINUX="rhgb"
-GRUB_DISABLE_RECOVERY="true"
-GRUB_ENABLE_BLSCFG=true
-EOF
-
-#efibootmgr -c -d $DISK -p 1 -L "Fedora (Custom)" -l \\EFI\\FEDORA\\SHIMX64.EFI
-
-sudo bash -c 'cat >> /mnt/etc/dnf/dnf.conf' <<EOF
-defaultyes=True
-fastestmirror=True
-max_parallel_downloads=10
-deltarpm=True
-EOF
-
-sudo chmod 1777 /mnt/var/tmp
-#sudo chmod 1770 /mnt/var/lib/sddm
-sudo chown -R $USER: /mnt/home/$USER/.mozilla
 
 #sudo systemctl daemon-reload
 #sudo mount -va
