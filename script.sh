@@ -534,6 +534,15 @@ chroot /mnt /bin/bash -e <<EOF
   cd ..
   rm -rvf grub-btrfs
   
+  sudo dnf group install --with-optional virtualization
+  sudo systemctl enable --now libvirtd
+  sudo virsh pool-define-as --name "Disk Images" --type dir --target /var/lib/libvirt/images
+  sudo virsh pool-define-as --name "Installation Media" --type dir --target /var/lib/libvirt/boot
+  sudo virsh pool-start --build "Disk Images"
+  sudo virsh pool-start --build "Installation Media"
+  sudo virsh pool-autostart "Disk Images"
+  sudo virsh pool-autostart "Installation Media"
+  
 EOF
 
 #echo "Remove default grub packages"
@@ -585,6 +594,8 @@ sudo chmod 1770 /mnt/var/lib/sddm
   eval $(thefuck --alias fix) # Allows triggering thefuck using the keyword 'fix'." >> tee -a ~/.bashrc ~/.zshrc
   echo "alias neofetch='fastfetch'
   neofetch" >> tee -a ~/.bashrc ~/.zshrc
+  
+  
 
 #sudo systemctl daemon-reload
 #sudo mount -va
