@@ -542,6 +542,8 @@ chroot /mnt /bin/bash -e <<EOF
   sudo virsh pool-start --build "Installation Media"
   sudo virsh pool-autostart "Disk Images"
   sudo virsh pool-autostart "Installation Media"
+  sudo usermod -a -G libvirt $username
+  sudo usermod -a -G kvm $username
   
 EOF
 
